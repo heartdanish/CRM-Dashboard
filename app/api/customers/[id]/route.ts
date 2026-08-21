@@ -4,10 +4,11 @@ import { CustomerInput } from "@/types/customer";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = (await req.json()) as Partial<CustomerInput>;
-  const index = customersStore.data.findIndex((c) => c.id === params.id);
+  const index = customersStore.data.findIndex((c) => c.id === id);
 
   if (index === -1) {
     return NextResponse.json({ error: "Customer not found." }, { status: 404 });
@@ -19,9 +20,10 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const index = customersStore.data.findIndex((c) => c.id === params.id);
+  const { id } = await params;
+  const index = customersStore.data.findIndex((c) => c.id === id);
 
   if (index === -1) {
     return NextResponse.json({ error: "Customer not found." }, { status: 404 });

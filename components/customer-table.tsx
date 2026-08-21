@@ -31,6 +31,7 @@ import {
 import { ArrowUpDown } from "lucide-react";
 import { FiltersPanel } from "@/components/filters-panel";
 import { CustomerFormDialog } from "@/components/customer-form-dialog";
+import { CustomerDetailsDialog } from "@/components/customer-details-dialog";
 
 async function fetchCustomers(): Promise<Customer[]> {
   const res = await fetch("/api/customers");
@@ -55,6 +56,8 @@ export function CustomerTable() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<10 | 25 | 50>(10);
   const [filters, setFilters] = useState<CustomerFilters>(EMPTY_FILTERS);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const {
     data: customers,
@@ -88,6 +91,11 @@ export function CustomerTable() {
   function handleFiltersChange(newFilters: CustomerFilters) {
     setFilters(newFilters);
     setPage(1);
+  }
+
+  function handleRowClick(customer: Customer) {
+    setSelectedCustomer(customer);
+    setDetailsOpen(true);
   }
 
   const companyOptions = Array.from(
@@ -215,7 +223,11 @@ export function CustomerTable() {
           </TableHeader>
           <TableBody>
             {paginated.map((customer) => (
-              <TableRow key={customer.id}>
+              <TableRow
+                key={customer.id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => handleRowClick(customer)}
+              >
                 <TableCell className="font-medium">{customer.name}</TableCell>
                 <TableCell>{customer.email}</TableCell>
                 <TableCell>{customer.lastContact}</TableCell>
@@ -286,6 +298,12 @@ export function CustomerTable() {
           </div>
         </div>
       </div>
+
+      <CustomerDetailsDialog
+        customer={selectedCustomer}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -59,8 +59,39 @@ async function createCustomer(data: CustomerInput): Promise<Customer> {
   return res.json();
 }
 
-export function CustomerFormDialog() {
-  const [open, setOpen] = useState(false);
+async function updateCustomer(
+  id: string,
+  data: Partial<CustomerInput>
+): Promise<Customer> {
+  const res = await fetch(`/api/customers/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update customer");
+  return res.json();
+}
+
+interface CustomerFormDialogProps {
+  mode?: "create" | "edit";
+  customer?: Customer;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideDefaultTrigger?: boolean;
+}
+
+export function CustomerFormDialog({
+  mode = "create",
+  customer,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
+  hideDefaultTrigger = false,
+}: CustomerFormDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? setControlledOpen! : setInternalOpen;
+
   const queryClient = useQueryClient();
 
   const form = useForm<FormValues>({
@@ -76,7 +107,31 @@ export function CustomerFormDialog() {
     },
   });
 
-  const mutation = useMutation({
+  useEffect(() => {
+    if (mode === "edit" && customer && open) {
+      form.reset({
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        company: customer.company,
+        status: customer.status,
+        lastContact: customer.lastContact,
+        notes: customer.notes,
+      });
+    } else if (mode === "create" && open) {
+      form.reset({
+        name: "",
+        email: "",
+        phone: "",
+        company: "",
+        status: "Active",
+        lastContact: new Date().toISOString().split("T")[0],
+        notes: "",
+      });
+    }
+  }, [mode, customer, open, form]);
+
+  const createMutation = useMutation({
     mutationFn: createCustomer,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
@@ -89,19 +144,50 @@ export function CustomerFormDialog() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: (data: FormValues) => updateCustomer(customer!.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast.success("Customer updated successfully");
+      setOpen(false);
+    },
+    onError: () => {
+      toast.error("Failed to update customer. Please try again.");
+    },
+  });
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
   function onSubmit(values: FormValues) {
-    mutation.mutate(values);
+    if (mode === "edit") {
+      updateMutation.mutate(values);
+    } else {
+      createMutation.mutate(values);
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className={buttonVariants({ className: "gap-2" })}>
-  <Plus className="h-4 w-4" />
-  Add Customer
-</DialogTrigger>
+      {!hideDefaultTrigger && (
+        <DialogTrigger className={buttonVariants({ className: "gap-2" })}>
+          {mode === "edit" ? (
+            <>
+              <Pencil className="h-4 w-4" />
+              Edit
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              Add Customer
+            </>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Customer</DialogTitle>
+          <DialogTitle>
+            {mode === "edit" ? "Edit Customer" : "Add Customer"}
+          </DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -169,7 +255,7 @@ export function CustomerFormDialog() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue />
@@ -219,12 +305,18 @@ export function CustomerFormDialog() {
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={mutation.isPending}
+                disabled={isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "Adding..." : "Add Customer"}
+              <Button type="submit" disabled={isPending}>
+                {isPending
+                  ? mode === "edit"
+                    ? "Saving..."
+                    : "Adding..."
+                  : mode === "edit"
+                  ? "Save Changes"
+                  : "Add Customer"}
               </Button>
             </DialogFooter>
           </form>
